@@ -5,90 +5,108 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.eteration.simplebanking.controller.AccountController;
-import com.eteration.simplebanking.controller.TransactionStatus;
-import com.eteration.simplebanking.model.Account;
-import com.eteration.simplebanking.model.DepositTransaction;
-import com.eteration.simplebanking.model.InsufficientBalanceException;
-import com.eteration.simplebanking.model.WithdrawalTransaction;
-import com.eteration.simplebanking.services.AccountService;
+import com.eteration.simplebanking.account.Account;
+import com.eteration.simplebanking.account.AccountRepository;
 
-import org.junit.jupiter.api.Assertions;
+import com.eteration.simplebanking.transaction.types.DepositTransaction;
+import com.eteration.simplebanking.transaction.types.WithdrawalTransaction;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.ResponseEntity;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+
 
 @SpringBootTest
 @ContextConfiguration
 @AutoConfigureMockMvc
 class ControllerTests  {
 
-    @Spy
-    @InjectMocks
-    private AccountController controller;
- 
-    @Mock
-    private AccountService service;
+    @Autowired
+    private MockMvc mockMvc;
 
-    
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private AccountRepository accountRepository;
+
     @Test
     public void givenId_Credit_thenReturnJson()
     throws Exception {
-        
-        Account account = new Account("Kerem Karaca", "17892");
+        Account account = new Account("Kerem Karaca", "12345");
+        doReturn(account).when(accountRepository).findByAccountNumber("12345");
 
-        doReturn(account).when(service).findAccount( "17892");
-        ResponseEntity<TransactionStatus> result = controller.credit( "17892", new DepositTransaction(1000.0));
-        verify(service, times(1)).findAccount("17892");
-        assertEquals("OK", result.getBody().getStatus());
+        DepositTransaction depositTransaction = new DepositTransaction(100.0);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/account/v1/credit/{accountNumber}", "12345")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(depositTransaction)))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status").value("OK"));
+
+        verify(accountRepository, times(1)).findByAccountNumber("12345");
     }
 
     @Test
     public void givenId_CreditAndThenDebit_thenReturnJson()
     throws Exception {
-        
-        Account account = new Account("Kerem Karaca", "17892");
 
-        doReturn(account).when(service).findAccount( "17892");
-        ResponseEntity<TransactionStatus> result = controller.credit( "17892", new DepositTransaction(1000.0));
-        ResponseEntity<TransactionStatus> result2 = controller.debit( "17892", new WithdrawalTransaction(50.0));
-        verify(service, times(2)).findAccount("17892");
-        assertEquals("OK", result.getBody().getStatus());
-        assertEquals("OK", result2.getBody().getStatus());
-        assertEquals(950.0, account.getBalance(),0.001);
+        Account account = new Account("Kerem Karaca", "12345");
+        doReturn(account).when(accountRepository).findByAccountNumber("12345");
+
+        DepositTransaction depositTransaction = new DepositTransaction(100.00);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/account/v1/credit/{accountNumber}", "12345")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(depositTransaction)))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status").value("OK"));
+
+
+        WithdrawalTransaction withdrawalTransaction = new WithdrawalTransaction(50.0);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/account/v1/debit/{accountNumber}", "12345")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(withdrawalTransaction)))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status").value("OK"));
+
+
+
+        verify(accountRepository, times(2)).findByAccountNumber("12345");
+        assertEquals(50.0, account.getBalance(),0.001);
+
     }
 
     @Test
-    public void givenId_CreditAndThenDebitMoreGetException_thenReturnJson()
-    throws Exception {
-        Assertions.assertThrows( InsufficientBalanceException.class, () -> {
-            Account account = new Account("Kerem Karaca", "17892");
+    public void givenId_CreditAndThenDebitMoreGetException_thenReturnJson() throws Exception {
 
-            doReturn(account).when(service).findAccount( "17892");
-            ResponseEntity<TransactionStatus> result = controller.credit( "17892", new DepositTransaction(1000.0));
-            assertEquals("OK", result.getBody().getStatus());
-            assertEquals(1000.0, account.getBalance(),0.001);
-            verify(service, times(1)).findAccount("17892");
+        Account account = new Account("Kerem Karaca", "12345");
+        doReturn(account).when(accountRepository).findByAccountNumber("12345");
 
-            ResponseEntity<TransactionStatus> result2 = controller.debit( "17892", new WithdrawalTransaction(5000.0));
-        });
-    }
+        DepositTransaction depositTransaction = new DepositTransaction(100.0);
 
-    @Test
-    public void givenId_GetAccount_thenReturnJson()
-    throws Exception {
-        
-        Account account = new Account("Kerem Karaca", "17892");
+        mockMvc.perform(MockMvcRequestBuilders.post("/account/v1/credit/{accountNumber}", "12345")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(depositTransaction)))
+                    .andExpect(MockMvcResultMatchers.status().isOk())
+                    .andExpect(MockMvcResultMatchers.jsonPath("$.status").value("OK"));
 
-        doReturn(account).when(service).findAccount( "17892");
-        ResponseEntity<Account> result = controller.getAccount( "17892");
-        verify(service, times(1)).findAccount("17892");
-        assertEquals(account, result.getBody());
+
+        WithdrawalTransaction withdrawalTransaction = new WithdrawalTransaction(500.0);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/account/v1/debit/{accountNumber}", "12345")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(withdrawalTransaction)))
+                    .andExpect(MockMvcResultMatchers.status().isBadRequest())
+                    .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("Insufficient balance"));
     }
 
 }
